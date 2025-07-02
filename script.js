@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const DSM = generateDSM(components, dependencies, mode);
     renderDSM(DSM);
-    const simSteps = 100000; // Increase to 1,000,000 steps for longer, smoother lines
+    const simSteps = 10000000; // Show even longer lines (5,000,000 steps)
     const simSeries = runSimulation(DSM, simSteps);
 
     history.push({ components, dependencies, data: simSeries });
@@ -165,16 +165,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return {
         label: `Run ${idx + 1}: C=${run.components}, D=${run.dependencies}`,
         data: run.data.map((y, i) => ({
-          x: i + 1, // x starts at 1, so no half-value on axis
+          x: i + 1,
           y: Math.max(y, 1e-4),
         })),
         borderColor: colors[idx % colors.length],
         backgroundColor: colors[idx % colors.length],
         fill: false,
         tension: 0,
-        pointRadius: 4,
-        pointHoverRadius: 7,
+        pointRadius: 2, // smaller points
+        pointHoverRadius: 4,
         stepped: true,
+        borderWidth: 1.5, // thinner lines
       };
     });
 
@@ -189,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
           x: {
             type: "logarithmic",
             min: 1,
-            max: Math.min(1e7, simSteps),
+            max: simSteps, // ensure x axis matches new simSteps
             title: { display: true, text: "# of Improvements Attempts" },
             ticks: {
               callback: function (val) {
@@ -243,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         elements: {
           line: {
-            borderWidth: 3,
+            borderWidth: 1.5, // thinner lines
           },
         },
       },
