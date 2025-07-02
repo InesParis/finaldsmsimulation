@@ -1,0 +1,177 @@
+/* styles.css */
+:root {
+  --mit-red: #a31f34;
+  --mit-gray: #8a8b8c;
+  --mit-light-gray: #d3d3d4;
+  --white: #ffffff;
+}
+
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 0;
+  background: var(--mit-light-gray);
+  color: var(--mit-gray);
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.controls {
+  background: var(--white);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  color: var(--mit-gray);
+}
+
+.controls h1 {
+  color: var(--mit-red);
+}
+
+.controls button,
+button#runSimulation {
+  background: var(--mit-red);
+  color: var(--white);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.controls button:hover,
+button#runSimulation:hover {
+  background: #7c1627;
+}
+
+.visualization {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  justify-content: flex-start;
+  align-items: stretch;
+  flex-direction: row;
+}
+
+/* Keep DSM and graph side by side on all screen sizes, just make them smaller on small screens */
+.dsm-container,
+.graph-container {
+  background: var(--white);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: unset;
+  max-width: none;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  /* Add min and max width for better responsiveness */
+  min-width: 220px;
+  max-width: 100%;
+}
+
+/* Responsive: keep side by side, just shrink them */
+@media (max-width: 900px) {
+  .visualization {
+    flex-direction: row;
+    gap: 1rem;
+  }
+  .dsm-container,
+  .graph-container {
+    min-width: 120px;
+    max-width: 50vw;
+    padding: 0.5rem;
+  }
+  #costChart {
+    min-height: 180px;
+    max-height: 260px;
+  }
+}
+
+/* On very small screens, allow stacking but only below 500px */
+@media (max-width: 500px) {
+  .visualization {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .dsm-container,
+  .graph-container {
+    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+    padding: 0.3rem;
+  }
+  #costChart {
+    min-height: 120px;
+    max-height: 180px;
+  }
+}
+
+#dsm {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  overflow: auto;
+  /* Prevent overflow for large matrices */
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#dsm table {
+  border-collapse: collapse;
+  margin: 0 auto;
+  /* Remove fixed scale, use responsive scaling below */
+  transform: none;
+  transform-origin: center;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#dsm td {
+  /* Responsive cell size: shrink for large matrices */
+  width: clamp(1rem, calc(8rem / var(--dsm-size, 5)), 2.8rem);
+  height: clamp(1rem, calc(8rem / var(--dsm-size, 5)), 2.8rem);
+  text-align: center;
+  border: 1px solid var(--mit-gray);
+  background: var(--white);
+}
+
+#dsm td[style*="#a31f34"] {
+  background: var(--mit-red) !important;
+}
+
+#costChart {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  min-height: 320px;
+  max-height: 480px;
+  display: block;
+  background: var(--white);
+  border-radius: 8px;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
