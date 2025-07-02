@@ -3,9 +3,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const history = [];
   let lastParams = {};
 
-  // Store all runs for overlaying
-  let runs = [];
-
   // Move info message directly next to the run simulation button
   const runBtn = document.getElementById("runSimulation");
   if (runBtn && !document.getElementById("simInfoMsg")) {
@@ -106,15 +103,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     updateChart(history, dependencies, components, DSM, simSteps);
-
-    // When running a new simulation, call plotGraph with the new data and a unique label/color
-    // For example, after simulation:
-    plotGraph(
-      Array.from({ length: components }, (_, i) => i + 1),
-      simSeries,
-      `Run ${history.length}`,
-      d3.schemeCategory10[history.length - 1]
-    );
   });
 
   function generateDSM(n, d, mode) {
@@ -457,115 +445,5 @@ document.addEventListener("DOMContentLoaded", () => {
       chart.options.scales.y.max = yMax;
       chart.update();
     }
-  }
-
-  // Function to plot the graph
-  function plotGraph(components, avgDependencies, label, color) {
-    runs.push({ components, avgDependencies, label, color });
-
-    // Clear previous plot
-    d3.select("#graph").selectAll("*").remove();
-
-    // Set up SVG and dimensions
-    const svg = d3
-      .select("#graph")
-      .append("svg")
-      .attr("width", 600)
-      .attr("height", 400);
-
-    const margin = { top: 40, right: 30, bottom: 40, left: 50 };
-    const width = 600 - margin.left - margin.right;
-    const height = 400 - margin.top - margin.bottom;
-
-    const g = svg
-      .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`);
-
-    // Compute y-axis domain with padding so line doesn't hit bottom
-    const yMin = d3.min(runs, (r) => d3.min(r.avgDependencies));
-    const yMax = d3.max(runs, (r) => d3.max(r.avgDependencies));
-    const yPadding = (yMax - yMin) * 0.1 || 1;
-
-    const x = d3
-      .scaleLinear()
-      .domain([
-        d3.min(runs, (r) => d3.min(r.components)),
-        d3.max(runs, (r) => d3.max(r.components)),
-      ])
-      .range([0, width]);
-
-    const y = d3
-      .scaleLinear()
-      .domain([Math.max(0, yMin - yPadding), yMax + yPadding])
-      .range([height, 0]);
-
-    // Axes
-    g.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x));
-    g.append("g").call(d3.axisLeft(y));
-
-    // Axis labels
-    svg
-      .append("text")
-      .attr("x", width / 2 + margin.left)
-      .attr("y", height + margin.top + 30)
-      .attr("text-anchor", "middle")
-      .text("Components");
-
-    svg
-      .append("text")
-      .attr("transform", "rotate(-90)")
-      .attr("x", -height / 2 - margin.top)
-      .attr("y", 15)
-      .attr("text-anchor", "middle")
-      .text("Average Dependencies");
-
-    // Plot each run
-    runs.forEach((run, i) => {
-      g.append("path")
-        .datum(
-          run.components.map((c, idx) => ({
-            x: c,
-            y: run.avgDependencies[idx],
-          }))
-        )
-        .attr("fill", "none")
-        .attr("stroke", run.color)
-        .attr("stroke-width", 2)
-        .attr(
-          "d",
-          d3
-            .line()
-            .x((d) => x(d.x))
-            .y((d) => y(d.y))
-        );
-    });
-
-    // Add legend
-    const legend = svg
-      .append("g")
-      .attr("transform", `translate(${width - 100},${margin.top})`);
-    runs.forEach((run, i) => {
-      legend
-        .append("rect")
-        .attr("x", 0)
-        .attr("y", i * 20)
-        .attr("width", 12)
-        .attr("height", 12)
-        .attr("fill", run.color);
-      legend
-        .append("text")
-        .attr("x", 18)
-        .attr("y", i * 20 + 10)
-        .text(run.label)
-        .attr("font-size", "12px")
-        .attr("alignment-baseline", "middle");
-    });
-  }
-
-  function clearGraph() {
-    runs = [];
-    d3.select("#graph").selectAll("*").remove();
-  }
+  } // <-- this closing brace was missing or misplaced
 });
