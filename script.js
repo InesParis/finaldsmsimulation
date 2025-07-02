@@ -115,6 +115,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let costs = Array(n).fill(1);
     const totalCosts = [];
     let lastTotal = costs.reduce((a, b) => a + b, 0);
+    let step = 1;
+
+    // Always start at initial cost
+    totalCosts.push(lastTotal);
 
     for (let t = 1; t <= steps; t++) {
       // Pick a random component i
@@ -123,13 +127,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Count number of dependencies (out-degree, including self)
       const d = DSM[i].reduce((sum, val) => sum + val, 0);
 
-      if (d === 0) {
-        totalCosts.push(lastTotal);
-        continue;
-      }
+      if (d === 0) continue;
 
+      // For high dependencies, the expected behavior is a diagonal (linear in log-log)
       // McNerney model: new cost = Math.random() ** (1/d)
-      // This produces convex for low d, linear for high d
+      // This produces convex for low d, diagonal for high d
       const sampled = Math.max(Math.pow(Math.random(), 1 / d), 1e-6);
 
       if (sampled < costs[i]) {
@@ -138,13 +140,17 @@ document.addEventListener("DOMContentLoaded", () => {
           costs.reduce((a, b) => a + b, 0),
           1e-6 * n
         );
+        totalCosts.push(lastTotal);
+        step++;
       }
-
-      totalCosts.push(lastTotal);
     }
 
-    if (totalCosts[0] !== n) {
-      totalCosts.unshift(n);
+    // Ensure the last value is included if no improvement at the end
+    if (
+      totalCosts.length === 1 ||
+      totalCosts[totalCosts.length - 1] !== lastTotal
+    ) {
+      totalCosts.push(lastTotal);
     }
 
     return totalCosts;
@@ -155,20 +161,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const colors = ["#A31F34", "#888", "#555", "#ccc"];
 
     const datasets = history.map((run, idx) => {
-      const data = run.data.map((y, i) => ({
-        x: i + 1, // plot actual simulation step
-        y: Math.max(y, 0.001),
-      }));
+      // X axis: log steps, only at cost change points
       return {
         label: `Run ${idx + 1}: C=${run.components}, D=${run.dependencies}`,
-        data,
+        data: run.data.map((y, i) => ({
+          x: i + 1, // x starts at 1, so no half-value on axis
+          y: Math.max(y, 1e-4),
+        })),
         borderColor: colors[idx % colors.length],
+        backgroundColor: colors[idx % colors.length],
         fill: false,
         tension: 0,
-        pointRadius: 3,
-        pointHoverRadius: 5,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        stepped: true,
       };
     });
+
     if (chart) chart.destroy();
     chart = new Chart(ctx, {
       type: "line",
@@ -180,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
           x: {
             type: "logarithmic",
             min: 1,
-            max: 1e7,
+            max: Math.min(1e7, simSteps),
             title: { display: true, text: "# of Improvements Attempts" },
             ticks: {
               callback: function (val) {
@@ -190,13 +199,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 return "";
               },
-              minRotation: 0,
-              maxRotation: 0,
               autoSkip: false,
               font: { size: 14 },
+              color: "#333",
+              maxTicksLimit: 8,
             },
             grid: {
               display: false,
+              drawBorder: true,
+            },
+            border: {
+              display: true,
+              color: "#333",
             },
           },
           y: {
@@ -214,15 +228,23 @@ document.addEventListener("DOMContentLoaded", () => {
               },
               font: { size: 14 },
               padding: 10,
+              color: "#333",
+              maxTicksLimit: 6,
             },
             grid: {
               display: false,
+              drawBorder: true,
             },
             offset: true,
           },
         },
         plugins: {
           legend: { position: "top" },
+        },
+        elements: {
+          line: {
+            borderWidth: 3,
+          },
         },
       },
     });
