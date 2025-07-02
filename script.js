@@ -10,9 +10,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const dependenciesInput = document.getElementById("dependencies");
     const modeInput = document.getElementById("outDegreeMode");
 
-    let components = parseInt(componentsInput.value);
-    let dependencies = parseInt(dependenciesInput.value);
+    // Enforce max values
+    let components = Math.min(parseInt(componentsInput.value), 15);
+    let dependencies = Math.min(parseInt(dependenciesInput.value), 14);
     const mode = modeInput.value;
+
+    // Prevent more dependencies than components-1
+    if (dependencies >= components) {
+      dependencies = components - 1;
+    }
+    // Update UI to reflect enforced values
+    componentsInput.value = components;
+    dependenciesInput.value = dependencies;
 
     if (
       isNaN(components) ||
@@ -23,18 +32,45 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Enter valid numbers for components and dependencies.");
       return;
     }
-    if (dependencies >= components) {
-      dependencies = components - 1;
-      dependenciesInput.value = dependencies;
-    }
 
     const DSM = generateDSM(components, dependencies, mode);
     renderDSM(DSM);
-    const simSteps = 10000;
+    const simSteps = 100000; // Increase to 1,000,000 steps for longer, smoother lines
     const simSeries = runSimulation(DSM, simSteps);
 
     history.push({ components, dependencies, data: simSeries });
     updateChart(history, simSteps);
+  });
+
+  // Add clear chart functionality
+  document.getElementById("clearChart").addEventListener("click", () => {
+    history.length = 0;
+    if (chart) {
+      chart.destroy();
+      chart = null;
+    }
+    // Optionally clear DSM display as well:
+    // document.getElementById("dsm").innerHTML = "";
+  });
+
+  // Prevent manual input above max/min in the UI
+  document.getElementById("components").addEventListener("input", (e) => {
+    if (parseInt(e.target.value) > 15) e.target.value = 15;
+    if (parseInt(e.target.value) < 2) e.target.value = 2;
+    // Adjust dependencies if needed
+    const depInput = document.getElementById("dependencies");
+    if (parseInt(depInput.value) >= parseInt(e.target.value)) {
+      depInput.value = parseInt(e.target.value) - 1;
+    }
+  });
+  document.getElementById("dependencies").addEventListener("input", (e) => {
+    if (parseInt(e.target.value) > 14) e.target.value = 14;
+    if (parseInt(e.target.value) < 1) e.target.value = 1;
+    // Adjust dependencies if needed
+    const compInput = document.getElementById("components");
+    if (parseInt(e.target.value) >= parseInt(compInput.value)) {
+      e.target.value = parseInt(compInput.value) - 1;
+    }
   });
 
   function generateDSM(n, d, mode) {
@@ -76,49 +112,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function runSimulation(DSM, steps) {
     const n = DSM.length;
-    let costs = Array(n).fill(1 - 1e-3); // Start slightly below 1 to avoid y=1
+    let costs = Array(n).fill(1);
     const totalCosts = [];
     let lastTotal = costs.reduce((a, b) => a + b, 0);
 
     for (let t = 1; t <= steps; t++) {
+      // Pick a random component i
       const i = Math.floor(Math.random() * n);
-      const A_i = DSM[i]
-        .map((val, j) => (val ? j : -1))
-        .filter((j) => j !== -1);
 
-      const d = A_i.length;
+      // Count number of dependencies (out-degree, including self)
+      const d = DSM[i].reduce((sum, val) => sum + val, 0);
+
       if (d === 0) {
         totalCosts.push(lastTotal);
         continue;
       }
 
-      const newCosts = [...costs];
-      let newTotal = 0;
-      for (let j of A_i) {
-        // Use a small epsilon to avoid zero, and convexity for low d
-        const sampled = Math.max(Math.pow(Math.random(), Math.max(d, 1)), 1e-6);
-        newCosts[j] = sampled;
-        newTotal += sampled;
-      }
+      // McNerney model: new cost = Math.random() ** (1/d)
+      // This produces convex for low d, linear for high d
+      const sampled = Math.max(Math.pow(Math.random(), 1 / d), 1e-6);
 
-      const oldTotal = A_i.reduce((sum, j) => sum + costs[j], 0);
-      if (newTotal < oldTotal) {
-        for (let j of A_i) costs[j] = newCosts[j];
-        const total = Math.max(
+      if (sampled < costs[i]) {
+        costs[i] = sampled;
+        lastTotal = Math.max(
           costs.reduce((a, b) => a + b, 0),
           1e-6 * n
         );
-        // Only push if strictly less than last value (no repeats)
-        if (total < lastTotal - 1e-9) {
-          totalCosts.push(total);
-          lastTotal = total;
-        }
       }
+
+      totalCosts.push(lastTotal);
     }
-    // Ensure the first value is always present
-    if (totalCosts.length === 0 || totalCosts[0] !== n * (1 - 1e-3)) {
-      totalCosts.unshift(n * (1 - 1e-3));
+
+    if (totalCosts[0] !== n) {
+      totalCosts.unshift(n);
     }
+
     return totalCosts;
   }
 
@@ -128,7 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const datasets = history.map((run, idx) => {
       const data = run.data.map((y, i) => ({
-        x: i + 1,
+        x: i + 1, // plot actual simulation step
         y: Math.max(y, 0.001),
       }));
       return {
@@ -141,9 +169,7 @@ document.addEventListener("DOMContentLoaded", () => {
         pointHoverRadius: 5,
       };
     });
-
     if (chart) chart.destroy();
-
     chart = new Chart(ctx, {
       type: "line",
       data: { datasets },
@@ -153,23 +179,50 @@ document.addEventListener("DOMContentLoaded", () => {
         scales: {
           x: {
             type: "logarithmic",
-            title: { display: true, text: "Improvement Attempts" },
-            // min/max removed for autoscale
+            min: 1,
+            max: 1e7,
+            title: { display: true, text: "# of Improvements Attempts" },
             ticks: {
-              callback: (val) => `10^${Math.round(Math.log10(val))}`,
+              callback: function (val) {
+                const log = Math.log10(val);
+                if (Math.abs(log - Math.round(log)) < 1e-6) {
+                  return `10^${Math.round(log)}`;
+                }
+                return "";
+              },
+              minRotation: 0,
+              maxRotation: 0,
+              autoSkip: false,
+              font: { size: 14 },
+            },
+            grid: {
+              display: false,
             },
           },
           y: {
             type: "logarithmic",
-            // min/max removed for autoscale
+            min: 1e-4,
+            max: 10,
             title: { display: true, text: "Cost" },
             ticks: {
-              callback: (val) => `10^${Math.round(Math.log10(val))}`,
+              callback: function (val) {
+                const log = Math.log10(val);
+                if (Math.abs(log - Math.round(log)) < 1e-6) {
+                  return `10^${Math.round(log)}`;
+                }
+                return "";
+              },
+              font: { size: 14 },
+              padding: 10,
             },
+            grid: {
+              display: false,
+            },
+            offset: true,
           },
         },
         plugins: {
-          legend: { position: "bottom" },
+          legend: { position: "top" },
         },
       },
     });
