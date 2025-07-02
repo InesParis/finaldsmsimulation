@@ -3,47 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Technology cost evolution simulator</title>
+    <title>MIT Cost Evolution Simulator</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="container">
-      <section class="controls">
-        <h1 style="color: #a31f34">Cost evolution simulator</h1>
-        <label
-          >Number of components:
-          <input type="number" id="components" min="2" value="10" />
-        </label>
-        <label
-          >Number of dependencies:
-          <input type="number" id="dependencies" min="1" value="5" />
-        </label>
-        <label
-          >Out-degree mode:
-          <select id="outDegreeMode">
-            <option value="fixed">Fixed</option>
-            <option value="variable">Variable</option>
-          </select>
-        </label>
-        <button id="runSimulation" style="background: #a31f34; color: #fff">
-          Run simulation
-        </button>
-      </section>
+      <h1>MIT Cost Evolution Simulator</h1>
 
-      <section class="visualization">
+      <div class="controls">
+        <label for="components">Components:</label>
+        <input type="number" id="components" min="2" max="15" value="10" />
+
+        <label for="dependencies">Dependencies:</label>
+        <input type="number" id="dependencies" min="1" max="14" value="5" />
+
+        <label for="outDegreeMode">Out-degree mode:</label>
+        <select id="outDegreeMode">
+          <option value="fixed">Fixed</option>
+          <option value="variable">Variable</option>
+        </select>
+
+        <button id="runSimulation">Run Simulation</button>
+        <button id="clearChart">Clear All Runs</button>
+      </div>
+
+      <div class="visualization">
         <div class="dsm-container">
-          <h2 style="color: #a31f34">Design structure matrix</h2>
+          <h2>Design Structure Matrix</h2>
           <div id="dsm"></div>
         </div>
+
         <div class="graph-container">
-          <h2 style="color: #a31f34">Cost evolution</h2>
-          <canvas id="costChart"></canvas>
+          <h2>Cost Evolution</h2>
+          <canvas
+            id="costChart"
+            style="width: 100%"
+            aria-label="Cost Evolution Chart"
+          ></canvas>
         </div>
-      </section>
+      </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
     <script src="script.js"></script>
   </body>
 </html>
