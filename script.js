@@ -1,7 +1,3 @@
-// MIT-styled, behavior-corrected DSM Simulation
-
-// Correct log-log convex-to-linear behavior from McNerney et al. (2011)
-
 document.addEventListener("DOMContentLoaded", () => {
   let chart;
 
@@ -49,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderDSM(DSM);
 
-    const simSteps = 10000000; // Show even longer lines
+    const simSteps = 10000000; // long runs
 
     const simSeries = runSimulation(DSM, simSteps);
 
@@ -163,13 +159,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let costs = Array(n).fill(1);
 
-    const series = []; // CHANGED: store {x,y} = {attemptNumber, totalCost}
+    const series = []; // {x,y} = {attemptNumber, totalCost}
 
     let lastTotal = costs.reduce((a, b) => a + b, 0);
 
     let step = 1;
 
-    // CHANGED: start series at attempt 1 with initial total cost
+    // start series at attempt 1 with initial total cost
 
     series.push({ x: 1, y: lastTotal });
 
@@ -197,15 +193,13 @@ document.addEventListener("DOMContentLoaded", () => {
           1e-6 * n
         );
 
-        // CHANGED: record the improvement at the attempt where it happened
-
         series.push({ x: t, y: lastTotal });
 
         step++;
       }
     }
 
-    // CHANGED: extend last horizontal segment to end of run
+    // extend last horizontal segment to end of run
 
     const lastPoint = series[series.length - 1];
 
@@ -213,7 +207,111 @@ document.addEventListener("DOMContentLoaded", () => {
       series.push({ x: steps, y: lastTotal });
     }
 
-    return series; // CHANGED: return {x,y} points
+    return series; // {x,y} points
+  }
+
+  // =========================
+
+  // Smoothing helpers (visual only)
+
+  // =========================
+
+  // CHANGED: geometric mean for positive values
+
+  function geoMean(arr) {
+    if (!arr.length) return null;
+
+    const s = arr.reduce((acc, v) => acc + Math.log(v), 0);
+
+    return Math.exp(s / arr.length);
+  }
+
+  // CHANGED: log-spaced binning + geometric-mean smoothing
+
+  // binsPerDecade: 12–24 is a good range; smaller => clearer convexity
+
+  function binAndSmooth(series, binsPerDecade = 16) {
+    if (!series.length) return [];
+
+    const first = series[0];
+
+    const last = series[series.length - 1];
+
+    const maxX = last.x;
+
+    const decades = Math.max(0, Math.log10(Math.max(1, maxX)));
+
+    const totalBins = Math.max(1, Math.ceil(decades * binsPerDecade));
+
+    // build bin edges in log-space
+
+    const edges = [];
+
+    for (let b = 0; b <= totalBins; b++) {
+      edges.push(Math.pow(10, b / binsPerDecade));
+    }
+
+    if (edges[0] > 1) edges.unshift(1);
+
+    if (edges[edges.length - 1] < maxX) edges.push(maxX);
+
+    const out = [];
+
+    let idx = 0;
+
+    // always include the first point
+
+    out.push({ x: first.x, y: first.y });
+
+    for (let e = 0; e < edges.length - 1; e++) {
+      const left = edges[e];
+
+      const right = edges[e + 1];
+
+      const xs = [];
+
+      const ys = [];
+
+      // advance to left boundary
+
+      while (idx < series.length && series[idx].x < left) idx++;
+
+      const startIdx = idx;
+
+      // collect points in the bin [left, right]
+
+      while (idx < series.length && series[idx].x <= right) {
+        xs.push(series[idx].x);
+
+        ys.push(series[idx].y);
+
+        idx++;
+      }
+
+      if (ys.length) {
+        const gx = geoMean(xs);
+
+        const gy = geoMean(ys);
+
+        if (gx && gy) out.push({ x: gx, y: gy });
+      } else {
+        // keep continuity if bin has no events
+
+        if (startIdx > 0) {
+          const prev = series[startIdx - 1];
+
+          out.push({ x: Math.sqrt(left * right), y: prev.y });
+        }
+      }
+    }
+
+    // ensure last point included
+
+    const lastOut = out[out.length - 1];
+
+    if (!lastOut || lastOut.x !== last.x) out.push({ x: last.x, y: last.y });
+
+    return out;
   }
 
   function updateChart(history, simSteps) {
@@ -222,12 +320,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const colors = ["#A31F34", "#888", "#555", "#ccc"];
 
     const datasets = history.map((run, idx) => {
+      // CHANGED: smooth in log-space so low-D convexity is visible
+
+      const smooth = binAndSmooth(run.data, 16).map((p) => ({
+        x: p.x,
+
+        y: Math.max(p.y, 1e-8), // rendering floor only
+      }));
+
       return {
         label: `Run ${idx + 1}: C=${run.components}, D=${run.dependencies}`,
 
-        // CHANGED: use recorded attempt numbers on x; allow very small y
-
-        data: run.data.map((p) => ({ x: p.x, y: Math.max(p.y, 1e-8) })),
+        data: smooth, // CHANGED
 
         borderColor: colors[idx % colors.length],
 
@@ -235,15 +339,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         fill: false,
 
-        tension: 0,
+        pointRadius: 0, // line only (no dots)
 
-        pointRadius: 0, // CHANGED: cleaner long lines
+        pointHoverRadius: 0,
 
-        pointHoverRadius: 4,
+        stepped: false, // CHANGED: continuous between bin centers
 
-        stepped: "before", // CHANGED: hold value until improvement, then drop
+        tension: 0, // honest straight connectors
 
-        borderWidth: 1.5, // thinner lines
+        borderWidth: 2, // CHANGED: slightly thicker
+
+        parsing: false,
       };
     });
 
@@ -265,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             min: 1,
 
-            max: simSteps, // ensure x axis matches run length
+            max: simSteps,
 
             title: { display: true, text: "# of Improvements Attempts" },
 
@@ -289,23 +395,15 @@ document.addEventListener("DOMContentLoaded", () => {
               maxTicksLimit: 8,
             },
 
-            grid: {
-              display: false,
+            grid: { display: false, drawBorder: true },
 
-              drawBorder: true,
-            },
-
-            border: {
-              display: true,
-
-              color: "#333",
-            },
+            border: { display: true, color: "#333" },
           },
 
           y: {
             type: "logarithmic",
 
-            min: 1e-8, // you can lower to 1e-12 if you want even longer lines
+            min: 1e-8, // lower to 1e-12 if you want more depth
 
             max: 10,
 
@@ -331,11 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
               maxTicksLimit: 6,
             },
 
-            grid: {
-              display: false,
-
-              drawBorder: true,
-            },
+            grid: { display: false, drawBorder: true },
 
             offset: true,
           },
@@ -346,9 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
 
         elements: {
-          line: {
-            borderWidth: 1.5, // thinner lines
-          },
+          line: { borderWidth: 2 },
         },
       },
     });
