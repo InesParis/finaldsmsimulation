@@ -132,7 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // For high dependencies, the expected behavior is a diagonal (linear in log-log)
       // McNerney model: new cost = Math.random() ** (1/d)
       // This produces convex for low d, diagonal for high d
-      const sampled = Math.max(Math.pow(Math.random(), 1 / d), 1e-6);
+      const sampled = Math.max(Math.pow(Math.random(), 1 / (d * 0.98)), 1e-12);
 
       if (sampled < costs[i]) {
         costs[i] = sampled;
@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           y: {
             type: "logarithmic",
-            min: 1e-4,
+            min: 1e-12, // allow lines to go further down
             max: 10,
             title: { display: true, text: "Cost" },
             ticks: {
