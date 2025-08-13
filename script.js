@@ -1,3 +1,7 @@
+// MIT-styled, behavior-corrected DSM Simulation
+
+// Correct log-log convex-to-linear behavior from McNerney et al. (2011)
+
 document.addEventListener("DOMContentLoaded", () => {
   let chart;
 
@@ -212,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // =========================
 
-  // Smoothing helpers (visual only)
+  // VISUAL HELPERS (no math changes)
 
   // =========================
 
@@ -226,42 +230,88 @@ document.addEventListener("DOMContentLoaded", () => {
     return Math.exp(s / arr.length);
   }
 
-  // CHANGED: log-spaced binning + geometric-mean smoothing
+  // CHANGED: choose an "interesting" x-extent where ~99% of the total drop has already occurred
 
-  // binsPerDecade: 12–24 is a good range; smaller => clearer convexity
-
-  function binAndSmooth(series, binsPerDecade = 16) {
-    if (!series.length) return [];
-
+  function computeInterestingX(series) {
     const first = series[0];
 
     const last = series[series.length - 1];
 
-    const maxX = last.x;
+    const y0 = first.y;
 
-    const decades = Math.max(0, Math.log10(Math.max(1, maxX)));
+    const yN = last.y;
 
-    const totalBins = Math.max(1, Math.ceil(decades * binsPerDecade));
+    if (y0 <= 0) return last.x;
 
-    // build bin edges in log-space
+    const target = yN + 0.01 * (y0 - yN); // 99% of total drop reached
 
-    const edges = [];
+    let xAtTarget = last.x;
 
-    for (let b = 0; b <= totalBins; b++) {
-      edges.push(Math.pow(10, b / binsPerDecade));
+    for (let i = 0; i < series.length; i++) {
+      if (series[i].y <= target) {
+        xAtTarget = series[i].x;
+
+        break;
+      }
     }
 
-    if (edges[0] > 1) edges.unshift(1);
+    // give some margin to show the tail but avoid plotting the full run
 
-    if (edges[edges.length - 1] < maxX) edges.push(maxX);
+    return Math.max(10, Math.min(last.x, xAtTarget * 2));
+  }
 
-    const out = [];
+  // CHANGED: build multiplicative edges between a..b with k bins/decade
+
+  function buildEdges(a, b, binsPerDecade) {
+    const edges = [];
+
+    const start = Math.max(1, a);
+
+    const end = Math.max(start, b);
+
+    const factor = Math.pow(10, 1 / binsPerDecade);
+
+    let cur = start;
+
+    edges.push(start);
+
+    while (cur < end) {
+      cur = Math.min(end, cur * factor);
+
+      edges.push(cur);
+    }
+
+    return edges;
+  }
+
+  // CHANGED: adaptive log-binning (dense early, lighter later) + geometric-mean smoothing
+
+  function adaptiveBinAndSmooth(
+    series,
+    xMax,
+    split = 1e3,
+    binsEarly = 30,
+    binsLate = 12
+  ) {
+    if (!series.length) return [];
+
+    // keep only up to xMax
+
+    const clipped = series.filter((p) => p.x <= xMax);
+
+    const first = clipped[0];
+
+    const last = clipped[clipped.length - 1];
+
+    const edges1 = buildEdges(1, Math.min(split, xMax), binsEarly);
+
+    const edges2 = xMax > split ? buildEdges(split, xMax, binsLate) : [];
+
+    const edges = edges1.concat(edges2.slice(1)); // avoid duplicate split
+
+    const out = [{ x: first.x, y: first.y }];
 
     let idx = 0;
-
-    // always include the first point
-
-    out.push({ x: first.x, y: first.y });
 
     for (let e = 0; e < edges.length - 1; e++) {
       const left = edges[e];
@@ -272,18 +322,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const ys = [];
 
-      // advance to left boundary
-
-      while (idx < series.length && series[idx].x < left) idx++;
+      while (idx < clipped.length && clipped[idx].x < left) idx++;
 
       const startIdx = idx;
 
-      // collect points in the bin [left, right]
+      while (idx < clipped.length && clipped[idx].x <= right) {
+        xs.push(clipped[idx].x);
 
-      while (idx < series.length && series[idx].x <= right) {
-        xs.push(series[idx].x);
-
-        ys.push(series[idx].y);
+        ys.push(clipped[idx].y);
 
         idx++;
       }
@@ -294,22 +340,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const gy = geoMean(ys);
 
         if (gx && gy) out.push({ x: gx, y: gy });
-      } else {
-        // keep continuity if bin has no events
+      } else if (startIdx > 0) {
+        // keep continuity across empty bins
 
-        if (startIdx > 0) {
-          const prev = series[startIdx - 1];
+        const prev = clipped[startIdx - 1];
 
-          out.push({ x: Math.sqrt(left * right), y: prev.y });
-        }
+        out.push({ x: Math.sqrt(left * right), y: prev.y });
       }
     }
 
-    // ensure last point included
-
-    const lastOut = out[out.length - 1];
-
-    if (!lastOut || lastOut.x !== last.x) out.push({ x: last.x, y: last.y });
+    if (out[out.length - 1].x !== last.x) out.push({ x: last.x, y: last.y });
 
     return out;
   }
@@ -319,10 +359,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const colors = ["#A31F34", "#888", "#555", "#ccc"];
 
-    const datasets = history.map((run, idx) => {
-      // CHANGED: smooth in log-space so low-D convexity is visible
+    // CHANGED: decide an x-limit that shows the “interesting” part for each run,
 
-      const smooth = binAndSmooth(run.data, 16).map((p) => ({
+    // then use the largest of those so all series fit.
+
+    const xLimits = history.map((run) => computeInterestingX(run.data));
+
+    const xMaxForChart = Math.min(simSteps, Math.max(...xLimits));
+
+    const datasets = history.map((run, idx) => {
+      // CHANGED: adaptive binning so early curvature is visible
+
+      const smooth = adaptiveBinAndSmooth(
+        run.data,
+        xMaxForChart,
+        1e3,
+        30,
+        12
+      ).map((p) => ({
         x: p.x,
 
         y: Math.max(p.y, 1e-8), // rendering floor only
@@ -339,15 +393,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         fill: false,
 
-        pointRadius: 0, // line only (no dots)
+        pointRadius: 0, // line only
 
         pointHoverRadius: 0,
 
         stepped: false, // CHANGED: continuous between bin centers
 
-        tension: 0, // honest straight connectors
+        tension: 0, // straight connectors (truthful)
 
-        borderWidth: 2, // CHANGED: slightly thicker
+        borderWidth: 2, // a bit thicker for visibility
 
         parsing: false,
       };
@@ -371,7 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             min: 1,
 
-            max: simSteps,
+            max: xMaxForChart, // CHANGED: focus on the interesting part
 
             title: { display: true, text: "# of Improvements Attempts" },
 
