@@ -106,27 +106,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function generateDSM(n, d, mode) {
     const DSM = Array.from({ length: n }, () => Array(n).fill(0));
-
     for (let i = 0; i < n; i++) {
+      // Always count self as a dependency
       DSM[i][i] = 1;
-
-      let outDegree = mode === "fixed" ? d : Math.floor(Math.random() * d) + 1;
-
-      outDegree = Math.min(outDegree, n - 1);
-
+      // Out-degree should be d-1 (excluding self), so total including self is d
+      let outDegree =
+        mode === "fixed" ? d - 1 : Math.floor(Math.random() * (d - 1)) + 1;
+      outDegree = Math.max(0, Math.min(outDegree, n - 1));
       const targets = [...Array(n).keys()].filter((j) => j !== i);
-
       for (let k = targets.length - 1; k > 0; k--) {
         const swap = Math.floor(Math.random() * (k + 1));
-
         [targets[k], targets[swap]] = [targets[swap], targets[k]];
       }
-
       for (let k = 0; k < outDegree; k++) {
         DSM[i][targets[k]] = 1;
       }
     }
-
     return DSM;
   }
 
