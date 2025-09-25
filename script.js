@@ -353,6 +353,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const ctx = document.getElementById("costChart").getContext("2d");
     const colors = ["#A31F34", "#888", "#555", "#ccc"];
 
+    // Always show the full range: from 1 to 1e6
+    const xMaxForChart = 1e6;
+    const xMinForChart = 1;
+
     // Compute interesting y-min for all runs (e.g., 1% above the lowest value)
     let minY = 1e-8;
     let maxY = 10;
@@ -370,12 +374,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // CHANGED: decide an x-limit that shows the “interesting” part for each run,
-
-    // then use the largest of those so all series fit.
-
-    const xLimits = history.map((run) => computeInterestingX(run.data));
-    const xMaxForChart = Math.min(simSteps, Math.max(...xLimits));
     const datasets = history.map((run, idx) => {
       const smooth = adaptiveBinAndSmooth(
         run.data,
@@ -411,8 +409,8 @@ document.addEventListener("DOMContentLoaded", () => {
         scales: {
           x: {
             type: "logarithmic",
-            min: 1,
-            max: xMaxForChart,
+            min: xMinForChart,
+            max: xMaxForChart * 1.01, // Add 1% margin to ensure 10^6 is visible
             title: { display: true, text: "# of Improvements Attempts" },
             ticks: {
               callback: function (val) {
