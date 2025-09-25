@@ -356,20 +356,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateChart(history, simSteps) {
     const ctx = document.getElementById("costChart").getContext("2d");
-
     const colors = ["#A31F34", "#888", "#555", "#ccc"];
+
+    // Compute interesting y-min for all runs (e.g., 1% above the lowest value)
+    let minY = 1e-8;
+    let maxY = 10;
+    if (history.length) {
+      const allY = history.flatMap((run) =>
+        run.data.map((p) => (p.y !== undefined ? p.y : p))
+      );
+      const minVal = Math.min(...allY);
+      const maxVal = Math.max(...allY);
+      minY = Math.max(1e-8, minVal * 0.8); // 20% below min
+      maxY = Math.min(10, maxVal * 1.1); // 10% above max
+      if (minY === maxY) {
+        minY = Math.max(1e-8, minY * 0.5);
+        maxY = maxY * 2;
+      }
+    }
 
     // CHANGED: decide an x-limit that shows the “interesting” part for each run,
 
     // then use the largest of those so all series fit.
 
     const xLimits = history.map((run) => computeInterestingX(run.data));
-
     const xMaxForChart = Math.min(simSteps, Math.max(...xLimits));
-
     const datasets = history.map((run, idx) => {
-      // CHANGED: adaptive binning so early curvature is visible
-
       const smooth = adaptiveBinAndSmooth(
         run.data,
         xMaxForChart,
@@ -378,121 +390,76 @@ document.addEventListener("DOMContentLoaded", () => {
         12
       ).map((p) => ({
         x: p.x,
-
-        y: Math.max(p.y, 1e-8), // rendering floor only
+        y: Math.max(p.y, 1e-8),
       }));
-
       return {
         label: `Run ${idx + 1}: C=${run.components}, D=${run.dependencies}`,
-
-        data: smooth, // CHANGED
-
+        data: smooth,
         borderColor: colors[idx % colors.length],
-
         backgroundColor: colors[idx % colors.length],
-
         fill: false,
-
-        pointRadius: 0, // line only
-
+        pointRadius: 0,
         pointHoverRadius: 0,
-
-        stepped: false, // CHANGED: continuous between bin centers
-
-        tension: 0, // straight connectors (truthful)
-
-        borderWidth: 2, // a bit thicker for visibility
-
+        stepped: false,
+        tension: 0,
+        borderWidth: 2,
         parsing: false,
       };
     });
-
     if (chart) chart.destroy();
-
     chart = new Chart(ctx, {
       type: "line",
-
       data: { datasets },
-
       options: {
         responsive: true,
-
         maintainAspectRatio: false,
-
         scales: {
           x: {
             type: "logarithmic",
-
             min: 1,
-
-            max: xMaxForChart, // CHANGED: focus on the interesting part
-
+            max: xMaxForChart,
             title: { display: true, text: "# of Improvements Attempts" },
-
             ticks: {
               callback: function (val) {
                 const log = Math.log10(val);
-
                 if (Math.abs(log - Math.round(log)) < 1e-6) {
                   return `10^${Math.round(log)}`;
                 }
-
                 return "";
               },
-
               autoSkip: false,
-
               font: { size: 14 },
-
               color: "#333",
-
               maxTicksLimit: 8,
             },
-
             grid: { display: false, drawBorder: true },
-
             border: { display: true, color: "#333" },
           },
-
           y: {
             type: "logarithmic",
-
-            min: 1e-8, // lower to 1e-12 if you want more depth
-
-            max: 10,
-
+            min: minY,
+            max: maxY,
             title: { display: true, text: "Cost" },
-
             ticks: {
               callback: function (val) {
                 const log = Math.log10(val);
-
                 if (Math.abs(log - Math.round(log)) < 1e-6) {
                   return `10^${Math.round(log)}`;
                 }
-
                 return "";
               },
-
               font: { size: 14 },
-
               padding: 10,
-
               color: "#333",
-
               maxTicksLimit: 6,
             },
-
             grid: { display: false, drawBorder: true },
-
             offset: true,
           },
         },
-
         plugins: {
           legend: { position: "top" },
         },
-
         elements: {
           line: { borderWidth: 2 },
         },
